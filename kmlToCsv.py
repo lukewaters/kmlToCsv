@@ -19,6 +19,7 @@ KML --> CSV so that GAE can go CSV --> NDB
 
 from bs4 import BeautifulSoup
 import csv
+import re
 
 
 def process_coordinate_string(str):
@@ -38,12 +39,38 @@ def main():
     """
     Open the KML. Read the KML. Open a CSV file. Process a coordinate string to be a CSV row.
     """
-    with open('doc.kml', 'r') as f:
+    with open('GreenlandCalvingFronts.kml', 'r') as f:
         s = BeautifulSoup(f, 'xml')
-        with open('out.csv', 'wb') as csvfile:
-            writer = csv.writer(csvfile)
-            for coords in s.find_all('coordinates'):
-                writer.writerow(process_coordinate_string(coords.string))
+        with open('out.csv', 'w', newline='') as csvfile:
+            # writer = csv.writer(csvfile)
+            fieldnames = ["polygon_id", "polygon", "glacier_name", "date", "sensor", "glacier_id"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            count = 0
+            # Write header row, we may want to remove this row
+            for placemark in s.find_all('Placemark'):
+                # We can continue to parse the placemark object in the same way we would parse the whole document
+                element = {}
+                element['polygon_id'] = ''
+                element['glacier_name'] = placemark.find('name').contents[0]
+                try:
+                    element['polygon'] = placemark.find('coordinates').contents[0].strip() # using strip to remove extra blank space
+                except AttributeError:
+                    element['polygon'] = '' # some rows don't have coordinates
+                for elem in placemark.find_all('SimpleData'):
+                    try: 
+                        name = elem['name']
+                        if name == 'SENSOR':
+                            element['sensor'] = elem.contents[0]
+                        elif name == 'DATE_':
+                            element['date'] = elem.contents[0]
+                        elif name == 'ID':
+                            element['glacier_id'] = elem.contents[0]
+                    except KeyError:
+                        pass
+                writer.writerow(element)
+                count = count + 1
+    print("Count: ", count)
 
 if __name__ == "__main__":
     main()
